@@ -3,7 +3,6 @@ project(kuka_implementation)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
-
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -11,6 +10,9 @@ find_package(catkin REQUIRED COMPONENTS
   autharl_core
   roscpp
 )
+find_package(Boost REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(PCL 1.7 REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -114,15 +116,29 @@ catkin_package(
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
+include_directories("${BOOST_INCLUDE_DIRS}")
+message(${BOOST_LIBRARIES})
 include_directories(
-# include
+ include
   ${catkin_INCLUDE_DIRS}
 )
+# sources
+include_directories(include ${Eigen3_INCLUDE_DIRS} )
+
+add_executable(master src/master.cpp )
+target_link_libraries(master ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${BOOST_LIBRARIES} ${autharl_core})
+#add_dependencies(master autharl_core)
+
+#add_executable(collector src/collector.cpp )
+#target_link_libraries(collector ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${BOOST_LIBRARIES} ${autharl_core})
+#add_dependencies(collector autharl_core)
+
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/kuka_implementation.cpp
 # )
+
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
