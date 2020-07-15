@@ -29,13 +29,15 @@
 using namespace std;
 using namespace arma;
 
+/* This code is based on DMPs - General DMP - easy to reverse it
+            Despina - Ekaterini Argiropoulos
+                  June 2020
+            C++ Develop for Kuka Implementaion
+*/
+
 int main(int argc, char** argv)
 {
-  /* This code is based on DMPs - General DMP - easy to reverse it
-              Despina - Ekaterini Argiropoulos
-                    June 2020
-              C++ Develop for Kuka Implementaion
-  */
+
 
 
   /* statics */
@@ -60,6 +62,12 @@ int main(int argc, char** argv)
   infoFile<<"Test info.log"<<endl;
   infoFile <<dt << endl;
 
+  dataFile<<kind<<endl;
+  dataFile<<DIM<<endl;
+
+  /* Start time*/
+  gettimeofday (&startwtime, NULL);
+
   /*  Load data */
   // mat y_desired = loadData("data/DataPos_1D.txt");
   // mat dy_desired = loadData("data/DataVel_1D.txt");
@@ -67,10 +75,9 @@ int main(int argc, char** argv)
 
   mat y_test = loadData("Collector/PosX.txt");
   int data_size = y_test.n_cols;
+  dataFile<<"Size"<<data_size<<endl;
 
   mat y_desired(DIM,data_size), dy_desired(DIM,data_size), ddy_desired(DIM,data_size);
-
-
 
   for (int d = 0; d < DIM; d++)
   {
@@ -80,24 +87,24 @@ int main(int argc, char** argv)
 
   }
 
-
+  infoFile <<"Load Data" << endl;
 
   /* Load Time*/
   vec timed = loadTime(data_size);
 
-  /* Start time*/
-  gettimeofday (&startwtime, NULL);
+  infoFile <<"Load Time" << endl;
 
-  /** Set time vars*/
+  /* Set time vars*/
   double ts = timed(3) - timed(2);
   MAIN_TIME = timed(timed.n_rows-1);
 
   //  --or-----------
+  /*  diddMat to get velocity n' accel */
+
   mat y_or = niceReadXYZ("data/DataPos_3Dt.txt");
   mat dy_or = diffMat(data_size, DIM, ts, y_or);
   mat ddy_or = diffMat(data_size, DIM, ts, dy_or);
 
-  /*  DataFormer to get velocity n' accel */
   vec goal(DIM);
   goal = y_desired.col(data_size-1);
 
@@ -105,8 +112,12 @@ int main(int argc, char** argv)
   CanonicalStructure cs(data_size);
   cs.generateFx(kind, timed);
 
+  infoFile <<"Generate Canonical Structure" << endl;
+
+
   /*  Init DPM  */
   GDMP dmp[DIM];
+  infoFile <<"Init DMP" << endl;
 
   /*  Training  */
   for (int d = 0; d < DIM; d++)
@@ -114,14 +125,20 @@ int main(int argc, char** argv)
     dmp[d].training(y_desired.row(d),dy_desired.row(d),ddy_desired.row(d),timed);
   }
 
+  infoFile <<"Training DONE" << endl;
+
   /*  Solution  */
   static double TOTAL_DURATION = MAIN_TIME + EXTRA_TIME;
   int extra_samples = EXTRA_TIME/ts;
 
+  infoFile <<"Solution Start" << endl;
+  infoFile <<"Total Duration"<<TOTAL_DURATION<< endl;
+  infoFile <<"Extra Time" <<EXTRA_TIME<< endl;
+
   /* Controller inits*/
   // copController copC;
 
-  /*init_solution gia kathe dmp*/
+  /*init_solution for each dmp*/
   int i  = 0;
   double t = 0;
   mat f_prev(3,DIM);
