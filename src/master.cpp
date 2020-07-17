@@ -10,9 +10,14 @@
 #include "loadTime.cpp"
 #include "LowPassFilter.hpp"
 // #include "controller.cpp"
-#include "niceReadXYZ.cpp"
+#include "readQ.cpp"
 #include <ros/ros.h>
 #include "diff.cpp"
+
+// AUTh-ARL core
+#include <thread>
+#include <autharl_core>
+#include <lwr_robot/robot.h>
 // #include "controller.cpp"
 
 /* includes from example*/
@@ -38,15 +43,28 @@ using namespace arma;
 int main(int argc, char** argv)
 {
 
+  // Initialize the ROS node
+  ros::init(argc, argv, "get_desired_trajectory");
+  ros::NodeHandle n;
+  auto model = std::make_shared<arl::robot::ROSModel>();
+  auto robot = std::make_shared<arl::robot::RobotSim>(model, 1e-3);
 
+  // auto robot = std::make_shared<arl::lwr::Robot>(model);
+  auto rviz = std::make_shared<arl::viz::RosStatePublisher>(robot);
+
+  std::thread rviz_thread(&arl::viz::RosStatePublisher::run, rviz);
+  vec initial_config = {1.6968 ,   0.5681,   -1.1651 ,  -1.6293  ,  0.3011  ,  1.1462 ,   1.7304};
+  robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+  robot->setJointTrajectory(initial_config, 10);
 
   /* statics */
   static string kind = "discrete";
-  static int DIM = 3;
+  static int DIM = 7;
   static double EXTRA_TIME = 0; //sec
   static double MAIN_TIME;
+  int data_size = 7879;
 
-  //times
+  // Count time duration of program
   struct timeval startwtime, endwtime;
   double seq_time;
   time_t ttime = time(0);
@@ -63,7 +81,7 @@ int main(int argc, char** argv)
   infoFile <<dt << endl;
 
   dataFile<<kind<<endl;
-  dataFile<<DIM<<endl;
+  dataFile<<DIM<<"x"<<data_size<<endl;
 
   /* Start time*/
   gettimeofday (&startwtime, NULL);
@@ -73,47 +91,63 @@ int main(int argc, char** argv)
   // mat dy_desired = loadData("data/DataVel_1D.txt");
   // mat ddy_desired = loadData("data/DataAccel_1D.txt");
 
-  mat y_test = loadData("Collector/PosX.txt");
-  int data_size = y_test.n_cols;
-  dataFile<<"Size"<<data_size<<endl;
+  // mat y_test = loadData("Collector/pos_got.log");
+  // int data_size = y_test.n_cols;
+  // dataFile<<"Size"<<data_size<<endl;
+
+  // mat y_desired(DIM,data_size), dy_desired(DIM,data_size), ddy_desired(DIM,data_size);
+
+  // for (int d = 0; d < DIM; d++)
+  // {
+  //     y_desired.row(d) = (loadData("Collector/PosX.txt"));
+  //     dy_desired.row(d) = (loadData("Collector/VelX.txt"));
+  //     ddy_desired.row(d) = (loadData("Collector/AccelX.txt"));
+  //
+  // }
+
 
   mat y_desired(DIM,data_size), dy_desired(DIM,data_size), ddy_desired(DIM,data_size);
-
-  for (int d = 0; d < DIM; d++)
-  {
-      y_desired.row(d) = (loadData("Collector/PosX.txt"));
-      dy_desired.row(d) = (loadData("Collector/VelX.txt"));
-      ddy_desired.row(d) = (loadData("Collector/AccelX.txt"));
-
-  }
-
   infoFile <<"Load Data" << endl;
+  y_desired = readQ();
 
-  /* Load Time*/
-  vec timed = loadTime(data_size);
+    ofstream myFile;
+    std::ostringstream oss, ossd, ossdd;
 
-  infoFile <<"Load Time" << endl;
+    oss << "CHECK/yreadQ.txt";
 
-  /* Set time vars*/
-  double ts = timed(3) - timed(2);
-  MAIN_TIME = timed(timed.n_rows-1);
-
-  //  --or-----------
-  /*  diddMat to get velocity n' accel */
-
-  mat y_or = niceReadXYZ("data/DataPos_3Dt.txt");
-  mat dy_or = diffMat(data_size, DIM, ts, y_or);
-  mat ddy_or = diffMat(data_size, DIM, ts, dy_or);
+    myFile.open((oss.str()).c_str());
+    myFile<<y_desired<<endl;
+    myFile.close();
 
   vec goal(DIM);
   goal = y_desired.col(data_size-1);
+
+  /* Load Time*/
+  double DTS = robot->cycle;
+  vec timed(data_size); // = loadTime(data_size);
+
+  for (int l = 0; l<data_size; l++)
+    timed(l) = l*DTS;
+
+  /* Set time vars*/
+  double ts = timed(3) - timed(2);
+  MAIN_TIME = timed(data_size-1);
+
+  infoFile <<"Load Time" << endl;
+
+  /*  diddMat to get velocity n' accel */
+  dy_desired = diffMat(data_size, DIM, ts, y_desired);
+  ddy_desired = diffMat(data_size, DIM, ts, dy_desired);
+
+cout<<y_desired.n_cols<<endl;
+cout<<dy_desired.n_cols<<endl;
+cout<<ddy_desired.n_cols<<endl;
 
    /* Generate Canonical Structure */
   CanonicalStructure cs(data_size);
   cs.generateFx(kind, timed);
 
   infoFile <<"Generate Canonical Structure" << endl;
-
 
   /*  Init DPM  */
   GDMP dmp[DIM];
@@ -123,46 +157,69 @@ int main(int argc, char** argv)
   for (int d = 0; d < DIM; d++)
   {
     dmp[d].training(y_desired.row(d),dy_desired.row(d),ddy_desired.row(d),timed);
+    dataFile<<"id:"<<d<<'\t'<<"BFs = "<<dmp[d].BFs<<endl;
+
   }
 
   infoFile <<"Training DONE" << endl;
-
   /*  Solution  */
   static double TOTAL_DURATION = MAIN_TIME + EXTRA_TIME;
   int extra_samples = EXTRA_TIME/ts;
 
-  infoFile <<"Solution Start" << endl;
-  infoFile <<"Total Duration"<<TOTAL_DURATION<< endl;
-  infoFile <<"Extra Time" <<EXTRA_TIME<< endl;
+  infoFile <<"Solution Start " << endl;
+  infoFile <<"Total Duration = "<<TOTAL_DURATION<< endl;
+  infoFile <<"Extra Time = " <<EXTRA_TIME<< endl;
 
-  /* Controller inits*/
-  // copController copC;
-
-  /*init_solution for each dmp*/
   int i  = 0;
   double t = 0;
   mat f_prev(3,DIM);
 
+  /*init_solution for each dmp*/
   for (int d = 0; d < DIM; d++)
   {
     f_prev.col(d) = dmp[d].init_solution_dt(goal[d], cs, MAIN_TIME,  extra_samples, t, i);
   }
+
    /* fix sigmoid*/
    mat tsig = linspace(-MAIN_TIME-10,EXTRA_TIME,data_size+extra_samples);
    mat sig = 1-1/(1+exp(-tsig));
 
+   // vecs to help for set n' get position
+   vec commanded_pos(7), measured_pos(7);
+   commanded_pos.zeros();
+   measured_pos.zeros();
+
+   // open file to store messures
+   ofstream messuresFile;
+   messuresFile.open("Messures/robotJointPositions.txt");
+
+   // Run Solution for each t
   for( t = ts ; t < (MAIN_TIME + EXTRA_TIME + ts); t = t + ts)
   {
+    // get and store robot messures
+     measured_pos = robot->getJointPosition().toArma();
+     messuresFile<<measured_pos<<endl;
 
      i++;
+
+     // call for each DIM = 7 based on Quat
      for (int d = 0; d < DIM; d++)
      {
        f_prev.col(d) = dmp[d].run_solution_dt(t, goal[d],  ts, sig(i), i, f_prev(0,d), f_prev(1,d), f_prev(2,d));
+       commanded_pos(d) = dmp[d].y(i);
      }
-     // every dmp[d].y xDIM -> [x,y,z] then Q
 
-     //controller.
+     // assign position
+
+     // set new position
+     robot->setJointPosition(commanded_pos);
+
+     // wait for next robot cycle
+     robot->waitNextCycle();
   }
+
+  // close file stored messures from robot
+  messuresFile.close();
 
   for (int d = 0; d < DIM; d++)
   {
@@ -175,29 +232,19 @@ int main(int argc, char** argv)
     myFile<<dmp[d].y<<endl;
     myFile.close();
 
-    ossd << "CHECK/dy" << d <<".log";
-
-    myFile.open((ossd.str()).c_str());
-    myFile<<dmp[d].dy<<endl;
-    myFile.close();
-
-    ossdd << "CHECK/ddy" << d <<".log";
-
-    myFile.open((ossdd.str()).c_str());
-    myFile<<dmp[d].ddy<<endl;
-    myFile.close();
+    // ossd << "CHECK/dy" << d <<".log";
+    //
+    // myFile.open((ossd.str()).c_str());
+    // myFile<<dmp[d].dy<<endl;
+    // myFile.close();
+    //
+    // ossdd << "CHECK/ddy" << d <<".log";
+    //
+    // myFile.open((ossdd.str()).c_str());
+    // myFile<<dmp[d].ddy<<endl;
+    // myFile.close();
   }
-  // for (int d = 0; d < DIM; d++)
-  // {
-  //   dmp[d].run_solution(goal[d], cs, ts, MAIN_TIME, EXTRA_TIME, extra_samples);
-  // }
 
-
-  // /* Reverse Solution*/
-  // for (int d = 0; d < DIM; d++)
-  // {
-  //   dmp[d].run_reverse_solution(goal[d], cs, ts, MAIN_TIME, EXTRA_TIME, extra_samples);
-  // }
 
 /* Reverse Solution*/
   i  = 0;
@@ -231,6 +278,7 @@ int main(int argc, char** argv)
   seq_time = (double)((endwtime.tv_usec - startwtime.tv_usec)/1.0e6 + endwtime.tv_sec - startwtime.tv_sec);
   infoFile<<"GDMP clock time = "<<seq_time<<endl;
 
+  // close Log files
   infoFile.close();
   warnFile.close();
   errorFile.close();

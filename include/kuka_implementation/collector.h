@@ -20,56 +20,55 @@
  * IN THE SOFTWARE.
  ******************************************************************************/
 
-#include <kuka_implementation/collector.h>
-#include <ros/ros.h>
+#ifndef KUKA_IMPLEMENTATION_CONTROLLER_H
+#define KUKA_IMPLEMENTATION_CONTROLLER_H
+
+#include <autharl_core/robot/controller.h>
+#include <memory>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <armadillo>
 
+/*!
+ * \brief Implements a gravity compensation controller.
+ *
+ * This controller commands all of the joints of the robot with zero torques.
+ *
+ * \attention It assumes that the robot in use is torque controlled.
+ *
+ * Example of use:
+ *
+ * \code{.cpp}
+ * #include <autharl_core/controllers/gravity_compensation.h>
+ * #include <lwr_robot/robot/robot.h>
+ * // ...
+ * // Use the KUKA LWR4+
+ * auto model  = std::make_shared<lwr::robot::Model>("/robot_description");
+ * auto robot  = std::make_shared<lwr::robot::Robot>(model);
+ * Collector controller(robot);
+ * controller.run();
+ * \endcode
+ *
+ * \ingroup RobotControllers
+ */
+ using namespace std;
 
-using namespace std;
-using namespace arma;
-
-Collector::Collector(const std::shared_ptr<arl::robot::Robot>& robot) :
-  arl::robot::Controller(robot, "Collector")
+class Collector : public arl::robot::Controller
 {
-  jnt_torques.resize(robot->model->getNrOfJoints());
-}
+public:
+  explicit Collector(const std::shared_ptr<arl::robot::Robot>& robot);
+  ofstream myFile;
 
-void Collector::init()
-{
-  robot->setMode(arl::robot::Mode::TORQUE_CONTROL);
-  myFile.open("Collector/posCollected.txt");
+protected:
+  void init();
+  void update();
+  void command();
+  bool stop();
 
-}
+private:
+  Eigen::VectorXd jnt_torques;
+};
 
-void Collector::update()
-{
-  // open file
-   vec pos_got(7);
-   pos_got = robot->getJointPosition().toArma();
-   // for (int i = 0; i < 7; i++)
-   //   myFile<<fd_filtered_ext[i]<<endl;
-   this->myFile<<pos_got.t()<<endl;
 
-  jnt_torques.setZero();
-  robot->setJointTorque(jnt_torques);
-  // if (27 == getchar()) // 27 is for ESC
-  // {
-  //   myFile.close();
-  // }
-}
-
-void Collector::command()
-{
-  // robot->setJointTorque(jnt_torques);
-}
-
-bool Collector::stop()
-{
-  if (!ros::ok())
-    myFile.close();
-
-  return !ros::ok();
-}
+#endif  // KUKA_IMPLEMENTATION_CONTROLLER_H

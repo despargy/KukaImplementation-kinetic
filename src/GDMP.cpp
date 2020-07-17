@@ -56,7 +56,7 @@ void GDMP::training(mat y_desired,mat dy_desired,mat ddy_desired, vec timed)
   NSamples = y_desired.n_cols;
   dt = timed(3)-timed(2);
   Tend = timed(NSamples-1);
-  extra_train = 20;
+  extra_train = 100;
   // find force desired
   mat mat_refD(size(y_desired));
   mat_refD = find_reference_desired(y_desired, dy_desired, ddy_desired, timed);
@@ -80,58 +80,80 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
   dy0 = y_desired(0);
   g =  y_desired(NSamples-1);
 
-  double fd_original_fromSinc[NSamples], tau = Tend, a = 10, b = a/4;
-  // find original
-  for (int i = 0; i < NSamples; i++)
+  // y scaled
+
+
+  mat tsig = linspace(-Tend-200,extra_train*dt +2,NSamples+extra_train);
+  mat sig = 1-1/(1+exp(-tsig));
+
+  double y_scaled_ext[NSamples+extra_train], dy_ext[NSamples+extra_train], ddy_ext[NSamples+extra_train], timed_ext[NSamples+extra_train];
+  for (int i = 0;i<NSamples;i++)
   {
-    fd_original_fromSinc[i] = pow(tau,2) * ddy_desired(i) - a*(b*(1- exp(-4*timed(i)))- tau*dy_desired(i)) ;
+    y_scaled_ext[i] = sig(i)*(y_desired[i] - y0);
+    dy_ext[i] = dy_desired(i);
+    ddy_ext[i] = ddy_desired(i);
+    timed_ext[i] = timed(i);
+  }
+  for (int i = NSamples;i<NSamples+extra_train;i++)
+  {
+    y_scaled_ext[i] = sig(i)*(y_desired[NSamples-1] - y0);
+    dy_ext[i] = sig(i)*dy_desired(NSamples-1);
+    ddy_ext[i] = sig(i)*ddy_desired(NSamples-1);
+    timed_ext[i] = i*dt ;
+  }
+
+  double fd_original_fromSinc[NSamples+extra_train], tau = Tend, a = 10, b = a/4;
+  // find original
+  for (int i = 0; i < NSamples+extra_train; i++)
+  {
+    fd_original_fromSinc[i] = pow(tau,2) * ddy_ext[i] - a*(b*(1- exp(-4*timed_ext[i]))- tau*dy_ext[i]) ;
   }
     // Nyquist - fc
     double fNyquist;
-    fNyquist = fNyquistFunc(fd_original_fromSinc, NSamples, 1/dt, Tend );
+    fNyquist = fNyquistFunc(fd_original_fromSinc, NSamples+extra_train, 1/dt, Tend );
 
-  BFs = Tend*fNyquist;
+  BFs = round(Tend*fNyquist);
   tNyq = 1/fNyquist;
   Ns = ceil(NSamples/BFs);
 
   // original signal
-  double fd_original[NSamples];
+  double fd_original_scaled[NSamples+extra_train];
   double fd_filtered[NSamples];
 
-  double fd_original_ext[3*NSamples];
-  double fd_filtered_ext[3*NSamples];
+  double fd_original_ext[3*NSamples+extra_train];
+  double fd_filtered_ext[3*NSamples+extra_train];
 
   // find original
   for (int i = 0; i < NSamples; i++)
   {
-    fd_original[i] = ks*(y_desired(i)-dy0) + y0;
+    fd_original_scaled[i] = ks*(y_scaled_ext[i]-dy0) + y0;
   }
 
 
   // extent before filter
   for (int i = 0; i < NSamples; i++)
   {
-    fd_original_ext[i] = fd_original[0];
+    fd_original_ext[i] = fd_original_scaled[0];
   }
-  for (int i = 0; i < NSamples; i++)
+  for (int i = 0; i < NSamples+extra_train; i++)
   {
-    fd_original_ext[ i + NSamples ] = fd_original[i] ;
+    fd_original_ext[ i + NSamples ] = fd_original_scaled[i] ;
   }
-  for (int i = 2*NSamples; i < 3*NSamples; i++)
+  for (int i = 2*NSamples+extra_train; i < 3*NSamples+extra_train; i++)
   {
-    fd_original_ext[i] = fd_original[NSamples-1];
+    fd_original_ext[i] = fd_original_scaled[NSamples+extra_train-1];
   }
 
   // Lowpass Filter
   LowPassFilter lpf((1/(2*tNyq)), dt);
-  for(int i = 0; i < 3*NSamples; i++){
+  for(int i = 0; i < 3*NSamples+extra_train; i++){
   		fd_filtered_ext[i] = lpf.update(fd_original_ext[i]) ; //Update with 1.0 as input value.
   }
 
-  // keep specific fd_filtered
+  // keep specific fd_filtered size of NSamples
   for (int i = 0; i < NSamples; i++)
   {
-    fd_filtered[i] = fd_filtered_ext[i + NSamples];
+    fd_filtered[i] = fd_filtered_ext[i + NSamples] + y0;
   }
 
   mat A(3,NSamples); //3 y,dy,ddy not because of DIM
@@ -144,7 +166,7 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
 
   ofstream myFile;
   myFile.open("CHECK/fd_filtered.log");
-  for (int i = 0; i < 3*NSamples; i++)
+  for (int i = 0; i < 3*NSamples+extra_train; i++)
     myFile<<fd_filtered_ext[i]<<endl;
   myFile.close();
   //
@@ -647,57 +669,53 @@ vec GDMP::run_Rsolution_dt(double t_now, double goal, double ts, double sig, int
 
 double GDMP::fNyquistFunc(double *original, int size, double fs, double T)
 {
-  double l1;
-  l1 = (size % 2) == 0 ? size : size-1;
-  cout<<l1<<endl;
+  int L;
+  L = (size % 2) == 0 ? size : size+1;
+
   vec signal_in(size);
-  cx_vec signal_xf(size);
-
-  cx_mat XF_in(1,int(l1/2+1));
-  vec A1(size);
-
-  double f[int(l1/2+1)];
-  complex<double> epi;
-  double EdXF = 0;
-  double  img_EdXF = 0;
+  // cx_vec signal_xf(size);
+  //
+  // cx_mat XF_in(1,int(l1/2+1));
+  // vec A1(size);
+  //
+  double f[int(L/2)];
+  for ( int i = 0; i < (L/2); i++ )
+      f[i] = fs*i/L;
+  // complex<double> epi;
+  // double EdXF = 0;
+  // double  img_EdXF = 0;
   for (int i = 0; i<size ; i++)
     signal_in(i) = original[i];
 
-  signal_xf = fft(signal_in) ;
+  cx_vec P2(size);
+  P2 = fft(signal_in) ;
 
-  A1 = abs(signal_xf/l1);
-  for ( int i = 0; i < (l1/2+1); i++ )
-     XF_in(0,i) = A1(i);
-  for ( int i = 1; i < (l1/2); i++ )
-     XF_in(0,i) = XF_in(0,i) + XF_in(0,i);
-  for ( int i = 0; i <= (l1/2+1); i++ )
-      f[i] = fs*i/l1;
+  cx_vec Fd_original(int(L/2));
+  for ( int i = 0; i < (L/2); i++ )
+      Fd_original(i) = P2(i);
 
-  cx_mat conjXF = conj(XF_in);
-  for ( int i = 0; i < (l1/2+1); i++ )
+  double EdD = 0;
+  for ( int i = 0; i < (L/2); i++)
   {
-
-      epi =  XF_in(0,i)*conjXF(0,i);
-
-      EdXF =   EdXF + epi.real();
-      // img_EdXF =   img_EdXF + epi.imag();
+    if (f[i] < 40)
+      EdD += abs(pow(Fd_original(i),2));
   }
+
   double h = 0.001;
-  double EdDesired = (1-h)*EdXF;
+  double EdDesired = (1-h)*EdD;
   double energy_inter = 0;
 
   int i = -1;
   while( energy_inter < EdDesired)
   {
     i++;
-    epi =  XF_in(0,i)*conjXF(0,i);
-    energy_inter = energy_inter + epi.real();
+    energy_inter = energy_inter + abs(pow(Fd_original(i),2));
   }
-
+  cout<<i<<endl;
   double fNyq ;
 
   if ( i == -1)
-    fNyq = 2*f[int(l1/2)];
+    fNyq = 2*f[int(L/2)];
   else
     fNyq = 2*f[i];
 

@@ -2,12 +2,13 @@ cmake_minimum_required(VERSION 3.0.2)
 project(kuka_implementation)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++11)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   autharl_core
+  lwr_robot
   roscpp
 )
 find_package(Boost REQUIRED)
@@ -129,9 +130,9 @@ add_executable(master src/master.cpp )
 target_link_libraries(master ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${BOOST_LIBRARIES} ${autharl_core})
 #add_dependencies(master autharl_core)
 
-#add_executable(collector src/collector.cpp )
-#target_link_libraries(collector ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${BOOST_LIBRARIES} ${autharl_core})
-#add_dependencies(collector autharl_core)
+add_executable(main_collector src/main_collector.cpp src/collector.cpp )
+target_link_libraries(main_collector ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${BOOST_LIBRARIES})
+#add_dependencies(main_collector autharl_core)
 
 
 ## Declare a C++ library

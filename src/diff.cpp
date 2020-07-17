@@ -22,11 +22,12 @@ mat diffMat( int len, int DIM, double dt, mat y)
   mat dy(DIM, len) ;
   for (int d = 0; d<DIM; d++)
   {
-    dy(d,0) = y(d,0)/dt;
     for (int i = 1; i<len; i++)
     {
       dy(d,i) = (y(d,i) - y(d,i-1))/dt;
     }
+    dy(d,0) = dy(d,1);
+
   }
   return dy;
 

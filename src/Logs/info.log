@@ -1,4 +1,12 @@
 Test info.log
-Tue Jul 14 19:28:17 2020
+Fri Jul 17 17:06:16 2020
 
-GDMP clock time = 0.984901
+Load Data
+Load Time
+Generate Canonical Structure
+Init DMP
+Training DONE
+Solution Start 
+Total Duration = 7.878
+Extra Time = 0
+GDMP clock time = 12.2935
