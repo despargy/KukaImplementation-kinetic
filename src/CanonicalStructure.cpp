@@ -49,7 +49,7 @@ void CanonicalStructure::generateFx(string kind, vec timed)
   x0 = 0.01;
   t0 = 0;
   ax = 1/2;
-  T = timed[len-1];
+  T = timed[len-1]; // starts from 0sec - (len-1)*ts
   tf = T + t0;
   taf = 1;
   dtaf = 0;

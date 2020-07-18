@@ -1,12 +1,22 @@
-Test info.log
-Fri Jul 17 17:06:16 2020
+Sat Jul 18 17:08:26 2020
 
-Load Data
-Load Time
-Generate Canonical Structure
-Init DMP
-Training DONE
+Load Data: START
+Load Data: DONE
+Load Time: START
+Load Time: DONE
+Canonical Structure : DONE
+Initialize DMPs: DONE
+Training of DMPs: START
+Training of DMPs: DONE
 Solution Start 
 Total Duration = 7.878
 Extra Time = 0
-GDMP clock time = 12.2935
+InitSolution of DMPs: START
+InitSolution of DMPs: DONE
+Solution of DMPs: START
+Solution of DMPs: DONE
+RInitSolution of DMPs: START
+InitSolution of DMPs: DONE
+RSolution of DMPs: START
+RSolution of DMPs: DONE
+GDMP clock time = 29.0001

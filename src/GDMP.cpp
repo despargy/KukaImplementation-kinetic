@@ -39,32 +39,31 @@ public:
 
 GDMP::GDMP()
 {
-std::cout << "/* Constructor of GDMP */" << '\n';
+  std::cout << "/* Constructor of GDMP */" << '\n';
 }
 
 GDMP::~GDMP()
 {
   std::cout << "/* Deconstructor of GDMP */" << '\n';
-
 }
 
 void GDMP::training(mat y_desired,mat dy_desired,mat ddy_desired, vec timed)
 {
-
-  cout<<"Start Training"<<endl;
+  std::cout << "/* Start of Training */" << '\n';
 
   NSamples = y_desired.n_cols;
   dt = timed(3)-timed(2);
   Tend = timed(NSamples-1);
   extra_train = 100;
-  // find force desired
+
+  /* Reference Desired*/
   mat mat_refD(size(y_desired));
   mat_refD = find_reference_desired(y_desired, dy_desired, ddy_desired, timed);
 
-  // calculate_c_h_psi
+  /* Calculate centers h psi */
   calculate_centers(timed);
 
-  // generate_weights
+  /* Generate weights */
   generate_weights(mat_refD.row(0));
 
   std::cout << "/* End of Training */" << '\n';
@@ -80,20 +79,20 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
   dy0 = y_desired(0);
   g =  y_desired(NSamples-1);
 
-  // y scaled
-
-
+  /* sig y_desired to 0*/
   mat tsig = linspace(-Tend-200,extra_train*dt +2,NSamples+extra_train);
   mat sig = 1-1/(1+exp(-tsig));
 
   double y_scaled_ext[NSamples+extra_train], dy_ext[NSamples+extra_train], ddy_ext[NSamples+extra_train], timed_ext[NSamples+extra_train];
-  for (int i = 0;i<NSamples;i++)
+
+  for (int i = 0; i < NSamples; i++)
   {
     y_scaled_ext[i] = sig(i)*(y_desired[i] - y0);
     dy_ext[i] = dy_desired(i);
     ddy_ext[i] = ddy_desired(i);
     timed_ext[i] = timed(i);
   }
+
   for (int i = NSamples;i<NSamples+extra_train;i++)
   {
     y_scaled_ext[i] = sig(i)*(y_desired[NSamples-1] - y0);
@@ -103,34 +102,35 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
   }
 
   double fd_original_fromSinc[NSamples+extra_train], tau = Tend, a = 10, b = a/4;
-  // find original
+
+  /* find original */
   for (int i = 0; i < NSamples+extra_train; i++)
   {
     fd_original_fromSinc[i] = pow(tau,2) * ddy_ext[i] - a*(b*(1- exp(-4*timed_ext[i]))- tau*dy_ext[i]) ;
   }
-    // Nyquist - fc
-    double fNyquist;
-    fNyquist = fNyquistFunc(fd_original_fromSinc, NSamples+extra_train, 1/dt, Tend );
+
+  /* Nyquist - fc */
+  double fNyquist;
+  fNyquist = fNyquistFunc(fd_original_fromSinc, NSamples+extra_train, 1/dt, Tend );
 
   BFs = round(Tend*fNyquist);
   tNyq = 1/fNyquist;
   Ns = ceil(NSamples/BFs);
 
-  // original signal
+  /* original signal */
   double fd_original_scaled[NSamples+extra_train];
   double fd_filtered[NSamples];
 
   double fd_original_ext[3*NSamples+extra_train];
   double fd_filtered_ext[3*NSamples+extra_train];
 
-  // find original
+  /* find original scaled */
   for (int i = 0; i < NSamples; i++)
   {
     fd_original_scaled[i] = ks*(y_scaled_ext[i]-dy0) + y0;
   }
 
-
-  // extent before filter
+  /* extent before filter */
   for (int i = 0; i < NSamples; i++)
   {
     fd_original_ext[i] = fd_original_scaled[0];
@@ -144,18 +144,20 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
     fd_original_ext[i] = fd_original_scaled[NSamples+extra_train-1];
   }
 
-  // Lowpass Filter
+  /* Lowpass Filter */
   LowPassFilter lpf((1/(2*tNyq)), dt);
-  for(int i = 0; i < 3*NSamples+extra_train; i++){
+  for(int i = 0; i < 3*NSamples+extra_train; i++)
+  {
   		fd_filtered_ext[i] = lpf.update(fd_original_ext[i]) ; //Update with 1.0 as input value.
   }
 
-  // keep specific fd_filtered size of NSamples
+  /* keep specific fd_filtered size of NSamples */
   for (int i = 0; i < NSamples; i++)
   {
     fd_filtered[i] = fd_filtered_ext[i + NSamples] + y0;
   }
 
+  /* A to return in once Reference y,dy,ddy */
   mat A(3,NSamples); //3 y,dy,ddy not because of DIM
   for (int i = 0; i < NSamples; i++)
   {
@@ -164,11 +166,12 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
     A(2,i) = ks*pow(kt,2)*ddy_desired(i);
   }
 
-  ofstream myFile;
-  myFile.open("CHECK/fd_filtered.log");
-  for (int i = 0; i < 3*NSamples+extra_train; i++)
-    myFile<<fd_filtered_ext[i]<<endl;
-  myFile.close();
+  /* Printed in files for CHECK*/
+  // ofstream myFile;
+  // myFile.open("CHECK/fd_filtered.log");
+  // for (int i = 0; i < 3*NSamples+extra_train; i++)
+  //   myFile<<fd_filtered_ext[i]<<endl;
+  // myFile.close();
   //
   // myFile.open("CHECK/drefD.log");
   // myFile<<A.row(1)<<endl;
@@ -177,9 +180,11 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
   // myFile.open("CHECK/ddrefD.log");
   // myFile<<A.row(2)<<endl;
   // myFile.close();
+
   return A;
 }
 
+/* Calculate centers of kernels */
 void GDMP::calculate_centers(vec timed)
 {
   c.set_size(1,BFs+extra_train);
@@ -189,15 +194,14 @@ void GDMP::calculate_centers(vec timed)
     c(idx) = (idx)*tNyq;
   }
 
-
+  /* ext time for extra train*/
   vec timed_ext_train(NSamples+extra_train);
-
   for (int i = 0; i <NSamples; i++ )
     timed_ext_train(i) = timed(i);
-
   for (int i = 0; i < extra_train; i++ )
     timed_ext_train(i+NSamples) =  (i+1)*dt + timed(NSamples-1) ;
 
+  /* Sincs == psi */
   psi.set_size(BFs + extra_train, NSamples + extra_train);
   double x;
   for (int b = 0; b < BFs + extra_train; b++)
@@ -214,6 +218,7 @@ void GDMP::calculate_centers(vec timed)
 
 }
 
+/* Weights */
 void GDMP::generate_weights(mat fp_des)
 {
   std::cout << "/* start generate weights */" << '\n';
@@ -221,210 +226,103 @@ void GDMP::generate_weights(mat fp_des)
   mat scaled_fp_d = fp_des.t() - y0*ones(NSamples);
 
   w.set_size(BFs +  extra_train,1);
-
-  for (int idx = 0; idx<BFs; idx++)
+  /* weights for BFs*/
+  // !! DERIVATE WITH 0 ?
+  if ( g == y0 )
   {
-      w(idx) = scaled_fp_d(1+idx*Ns)/(g - y0);
+    for (int idx = 0; idx<BFs; idx++)
+    {
+        w(idx) = 1;
+    }
   }
+  else
+  {
+    for (int idx = 0; idx<BFs; idx++)
+    {
+        w(idx) = scaled_fp_d(1+idx*Ns)/(g - y0);
+    }
+  }
+
+  /* weights for extra train*/
   for (int idx = BFs; idx<BFs+extra_train; idx++)
   {
       w(idx) = w(BFs-1);
   }
 
 }
- void GDMP::run_solution(double goal, CanonicalStructure cs, double ts, double main_time, double extra_time, int extra_samples)
- {
-    /* Init mat sizes*/
-    mat fp(1,NSamples+extra_samples);
-    mat dfp(1,NSamples+extra_samples);
-    mat ddfp(1,NSamples+extra_samples);
-    mat fs(1,NSamples+extra_samples);
-    y.set_size(1,NSamples+extra_samples); dy.set_size(1,NSamples+extra_samples); ddy.set_size(1,NSamples+extra_samples);
-    mat y_ref(1,NSamples+extra_samples);
-    mat dy_ref(1,NSamples+extra_samples);
-    mat ddy_ref(1,NSamples+extra_samples);
 
-   double az = 10;
-   double bz = az/4;
 
-   double K = az*bz/pow(cs.taf,2);
-   double D = (az + cs.dtaf)/cs.taf;
+vec GDMP::init_solution_dt(double goal, CanonicalStructure cs, double main_time, int extra_samples, double t_now, int i)
+{
+  /* Set size = NSamples + extra samples
+      extra samples oq from extra time to run
+  */
+  y.set_size(1,NSamples+extra_samples);
+  dy.set_size(1,NSamples+extra_samples);
+  ddy.set_size(1,NSamples+extra_samples);
 
-   double k = goal - y0;
-   double t = 0;
-   double gama = 1 - exp(-1000*t);
+  az = 10;
+  bz = az/4;
 
-   int i = 0;
+  K = az*bz/pow(cs.taf,2);
+  D = (az + cs.dtaf)/cs.taf;
 
-   /* Init fp*/
-   double s = 0.0 ;
-   for (int l = 0; l < BFs + extra_train; l++)
-   {
-     s = s + w(l)*psi(l,i);
-   }
-   fp(i) =  gama*k*s + y0;
-   dfp(i) = 0;
-   ddfp(i) = 0;
-   y0d_hat = fp(i);
-   s = 0.0 ;
-   for (int l = 0; l < BFs + extra_train; l++)
-   {
-     s = s + w(l)*psi(l,NSamples-1);
-   }
-   gd_hat = (1 - exp(-1000*main_time))*k*s + y0;
-   double ks = (goal - y0) / (gd_hat - y0d_hat);
+  k = goal - y0;
 
-   /* Ref compute*/
-   y_ref(i)  = ks*(fp(i) - y0d_hat) + y0;
-   dy_ref(i)  = ks*dfp(i) ;
-   ddy_ref(i)  = ks*ddfp(i) ;
+  double gama = 1 - exp(-1000*t_now);
 
-   /* first time loop i = 0*/
-   y(i) = y0;
-   dy(i) = dy0;
-   fs(i) = ddy_ref(i) + D*dy_ref(i) + K*(y_ref(i)-goal);
-   ddy(i) = K*(goal-y(i)) - D*dy(i) + fs(i);
-
-   /* fix sigmoid*/
-   mat tsig = linspace(-main_time-10,extra_time,NSamples+extra_samples);
-   mat sig = 1-1/(1+exp(-tsig));
-
-   // /* ROS publisher*/
-   // ros::NodeHandle n;
-   // ros::Publisher solution_pub = n.advertise<std_msgs::String>("chatter", 1000);
-
-   for( double t = ts ; t < (main_time + extra_time + ts); t = t + ts)
-   {
-
-     i++;
-
-     // fp_compute
-     if (i > (NSamples-1))
-     {
-         fp(i) = fp(NSamples-1) ;
-         dfp(i) = dfp(NSamples-1) ;
-         ddfp(i) = dfp(NSamples-1);
-     }
-     else
-     {
-         s = 0.0 ;
-         for (int l = 0; l < BFs + extra_train; l++)
-         {
-           s = s + w(l)*psi(l,i);
-         }
-         gama = 1 - exp(-1000*t);
-         fp(i) = gama*k*s + y0;
-         dfp(i) =  (fp(i) - fp(i-1))/ts;
-         ddfp(i) = (dfp(i) - dfp(i-1))/ts;
-     }
-
-     //y ref_compute
-     y_ref(i)  = ks*(fp(i) - y0d_hat) + y0;
-     dy_ref(i)  = ks*dfp(i) ;
-     ddy_ref(i)  = ks*ddfp(i) ;
-
-     // Euler Solution
-     dy(i) = ddy(i-1)*ts + dy(i-1);
-     y(i) = dy(i)*ts + y(i-1);
-
-     // dynamical system
-     fs(i) = ddy_ref(i) + D*dy_ref(i) + K*(y_ref(i)-goal);
-     ddy(i) = K*(goal-y(i)) - D*dy(i) + sig(i)*fs(i);
-
-     // /* ros publisher*/
-     // if (ros::ok())
-     // {
-     //   std_msgs::String msg;
-     //   std::stringstream ss;
-     //   ss << "hello world " << i;
-     //   msg.data = ss.str();
-     //   ROS_INFO("%s", msg.data.c_str());
-     //   solution_pub.publish(msg);
-     //   ros::spinOnce();
-     // }
-     // else
-     // {}
-   }
-             ofstream myFile;
-             myFile.open("CHECK/fs.log");
-             myFile<<fs<<endl;
-             myFile.close();
-
-             myFile.open("CHECK/y.log");
-             myFile<<y<<endl;
-             myFile.close();
-
-             myFile.open("CHECK/dy.log");
-             myFile<<dy<<endl;
-             myFile.close();
-
-             myFile.open("CHECK/ddy.log");
-             myFile<<ddy<<endl;
-             myFile.close();
-
- }
-
-  vec GDMP::init_solution_dt(double goal, CanonicalStructure cs, double main_time, int extra_samples, double t_now, int i)
+  /* Init fp*/
+  double s = 0.0 ;
+  for (int l = 0; l < BFs + extra_train; l++)
   {
+    s = s + w(l)*psi(l,i);
+  }
 
-    y.set_size(1,NSamples+extra_samples);
-    dy.set_size(1,NSamples+extra_samples);
-    ddy.set_size(1,NSamples+extra_samples);
+  /* Declare double mat vec fp d dd */
+  double fp =  gama*k*s + y0;
+  double dfp = 0;
+  double ddfp = 0;
 
-    az = 10;
-    bz = az/4;
+  y0d_hat = fp;
 
-    K = az*bz/pow(cs.taf,2);
-    D = (az + cs.dtaf)/cs.taf;
+  /* needed to get gd_hat */
+  s = 0.0 ;
+  for (int l = 0; l < BFs + extra_train; l++)
+  {
+    s = s + w(l)*psi(l,NSamples-1);
+  }
 
-    k = goal - y0;
-
-    double gama = 1 - exp(-1000*t_now);
-
-    /* Init fp*/
-    double s = 0.0 ;
-    for (int l = 0; l < BFs + extra_train; l++)
-    {
-      s = s + w(l)*psi(l,i);
-    }
-
-    //declare double mat vec fp d dd
-    double fp =  gama*k*s + y0;
-    double dfp = 0;
-    double ddfp = 0;
-
-    y0d_hat = fp;
-
-    s = 0.0 ;
-    for (int l = 0; l < BFs + extra_train; l++)
-    {
-      s = s + w(l)*psi(l,NSamples-1);
-    }
-    gd_hat = (1 - exp(-1000*main_time))*k*s + y0;
-
+  gd_hat = (1 - exp(-1000*main_time))*k*s + y0;
+  // !! DERIVATE WITH 0 ?
+  if (gd_hat == y0d_hat)
+  {
+    ks = 1;
+  }
+  else
+  {
     ks = (goal - y0) / (gd_hat - y0d_hat);
+  }
 
+  /* Ref compute*/
+  double y_ref  = ks*(fp - y0d_hat) + y0;
+  double dy_ref  = ks*dfp ;
+  double ddy_ref  = ks*ddfp ;
 
-    /* Ref compute*/
-    double y_ref  = ks*(fp - y0d_hat) + y0;
-    double dy_ref  = ks*dfp ;
-    double ddy_ref  = ks*ddfp ;
+  /* first time loop i = 0*/
 
-   /* first time loop i = 0*/
+  // y dy ddy: only them are stored
+  y(i) = y0;
+  dy(i) = 0; //dy0;
+  double fs = ddy_ref + D*dy_ref + K*(y_ref-goal);
+  ddy(i) = K*(goal-y(i)) - D*dy(i) + fs;
 
-   // y dy ddy: only them are stored
-   y(i) = y0;
-   dy(i) = dy0;
-   double fs = ddy_ref + D*dy_ref + K*(y_ref-goal);
-   ddy(i) = K*(goal-y(i)) - D*dy(i) + fs;
+  vec info_back(3);
+  info_back(0)  = fp;
+  info_back(1)  = dfp;
+  info_back(2)  = ddfp;
 
-   vec info_back(3);
-   info_back(0)  = fp;
-   info_back(1)  = dfp;
-   info_back(2)  = ddfp;
-
-   return info_back;
- }
+  return info_back;
+}
 
  vec GDMP::run_solution_dt(double t_now, double goal, double ts, double sig, int i, double f_prev, double df_prev, double ddf_prev )
  {
@@ -432,7 +330,7 @@ void GDMP::generate_weights(mat fp_des)
      double dfp  ;
      double ddfp ;
 
-     // fp_compute
+     /* Compute fp */
      if (i > (NSamples-1))
      {
          fp = f_prev  ; //same as prev or (NSamples-1)
@@ -452,19 +350,20 @@ void GDMP::generate_weights(mat fp_des)
          ddfp = (dfp - df_prev)/ts;
      }
 
-     //y ref_compute
+     /* Compute refs */
      double y_ref  = ks*(fp - y0d_hat) + y0;
      double dy_ref  = ks*dfp ;
      double ddy_ref  = ks*ddfp ;
 
-     // Euler Solution
+     /* Euler Solution dt*/
      dy(i) = ddy(i-1)*ts + dy(i-1);
      y(i) = dy(i)*ts + y(i-1);
 
-     // dynamical system
+     /* dynamical system */
      double fs = ddy_ref + D*dy_ref + K*(y_ref-goal);
      ddy(i) = K*(goal-y(i)) - D*dy(i) + sig*fs;
 
+     /* keep it for next loop dt*/
      vec info_back(3);
      info_back(0)  = fp;
      info_back(1)  = dfp;
@@ -473,140 +372,43 @@ void GDMP::generate_weights(mat fp_des)
      return info_back;
  }
 
-void GDMP::run_reverse_solution(double goal, CanonicalStructure cs, double ts, double main_time, double extra_time, int extra_samples)
-{
-
-    /* Init mat sizes*/
-    mat Rfp(1,NSamples+extra_samples);
-    mat Rdfp(1,NSamples+extra_samples);
-    mat Rddfp(1,NSamples+extra_samples);
-    mat Rfs(1,NSamples+extra_samples);
-    Ry.set_size(1,NSamples+extra_samples); Rdy.set_size(1,NSamples+extra_samples); Rddy.set_size(1,NSamples+extra_samples);
-    mat Ry_ref(1,NSamples+extra_samples);
-    mat Rdy_ref(1,NSamples+extra_samples);
-    mat Rddy_ref(1,NSamples+extra_samples);
-
-    double az = 10;
-    double bz = az/4;
-
-    double K = az*bz/pow(cs.taf,2);
-    double D = (az + cs.dtaf)/cs.taf;
-
-    double Ry0d_hat = gd_hat;
-    double Rgd_hat = y0d_hat;
-
-    double Ry0 = goal;
-    double Rgoal = y0;
-
-    double ks = (goal - y0) / (gd_hat - y0d_hat);
-
-    double k = goal - y0;
-    double t = 0;
-    double gama = 1 - exp(-1000*t);
-
-    int i = 0;
-
-    /* Init fp*/
-    double s = 0.0 ;
-
-    Rfp(0) = ks*gd_hat + y0;
-    Rdfp(0) = 0;
-    Rddfp(0) = 0;
-
-    /* Ref compute*/
-    Ry_ref(0)  = ks*(Rfp(0) - Ry0d_hat) + Ry0;
-    Rdy_ref(0)  = ks*Rdfp(0) ;
-    Rddy_ref(0)  = ks*Rddfp(0) ;
-
-    Ry(i) = Ry0;
-    Rdy(i) = Ry0;
-    Rfs(i) = Rddy_ref(i) + D*Rdy_ref(i) + K*(Ry_ref(i)-y0);
-    Rddy(i) = K*(y0-Ry(i)) - D*Rdy(i) + Rfs(i);
-
-    mat tsig = linspace(-main_time-10,extra_time,NSamples+extra_samples);
-    mat sig = 1-1/(1+exp(-tsig));
-
-  for(double t = ts ; t < (main_time + extra_time + ts); t = t + ts)
-  {
-    i++;
-
-    // fp_reverse_compute
-    if (i > (NSamples-1))
-    {
-        Rfp(i) = Rfp(NSamples-1) ;
-        Rdfp(i) = Rdfp(NSamples-1) ;
-        Rddfp(i) = Rdfp(NSamples-1) ;
-    }
-    else
-    {
-        gama = 1 - exp(-1000*t);
-
-        s = 0.0 ;
-        for (int l = 0; l < BFs + extra_train; l++)
-        {
-          s = s + w(l)*psi(l,NSamples - i - 1);
-        }
-        Rfp(i) = k*s + y0;
-        Rdfp(i) =  (Rfp(i) - Rfp(i-1))/ts;
-        Rddfp(i) = (Rdfp(i) - Rdfp(i-1))/ts;
-    }
-
-    //y ref_compute
-    Ry_ref(i)  = ks*(Rfp(i) - Ry0d_hat) + Ry0;
-    Rdy_ref(i)  = ks*Rdfp(i) ;
-    Rddy_ref(i)  = ks*Rddfp(i) ;
-
-    // Euler Solution
-    Rdy(i) = Rddy(i-1)*ts + Rdy(i-1);
-    Ry(i) = Rdy(i)*ts + Ry(i-1);
-
-    // dynamical system
-    Rfs(i) = Rddy_ref(i) + D*Rdy_ref(i) + K*(Ry_ref(i)-Rgoal);
-    Rddy(i) = K*(Rgoal-Ry(i)) - D*Rdy(i) + sig(i)*Rfs(i);
-  }
-            ofstream myFile;
-               myFile.open("CHECK/Ry.log");
-               myFile<<Ry<<endl;
-               myFile.close();
-
-               myFile.open("CHECK/Rdy.log");
-               myFile<<Rdy<<endl;
-               myFile.close();
-
-               myFile.open("CHECK/Rddy_ref.log");
-               myFile<<Rddy<<endl;
-               myFile.close();
-}
 
 vec GDMP::init_Rsolution_dt(double goal, CanonicalStructure cs, double main_time, int extra_samples, double t_now, int i)
 {
-
+  /* Set size = NSamples + extra samples
+      extra samples oq from extra time to run
+  */
   Ry.set_size(1,NSamples+extra_samples);
   Rdy.set_size(1,NSamples+extra_samples);
   Rddy.set_size(1,NSamples+extra_samples);
 
+  /* Swap gd,y0 hats */
   Ry0d_hat = gd_hat;
   Rgd_hat = y0d_hat;
 
+  /* Swap gd,y0 */
   double Ry0 = goal;
   double Rgoal = y0;
 
   double gama = 1 - exp(-1000*t_now);
 
-  double Rfp = ks*gd_hat + y0;
+  /* init Rfp */
+  double Rfp = gama*(ks*gd_hat + y0) + Ry0d_hat;
   double Rdfp = 0;
   double Rddfp = 0;
 
-  /* Ref compute*/
+  /* Ref compute */
   double Ry_ref  = ks*(Rfp - Ry0d_hat) + Ry0;
   double Rdy_ref  = ks*Rdfp ;
   double Rddy_ref  = ks*Rddfp ;
 
+  /* Init R solutions dt */
   Ry(i) = Ry0;
-  Rdy(i) = Ry0;
+  Rdy(i) = 0; //Ry0;
   double Rfs = Rddy_ref + D*Rdy_ref + K*(Ry_ref-y0);
   Rddy(i) = K*(y0-Ry(i)) - D*Rdy(i) + Rfs;
 
+/* keep it for the nect loop dt */
  vec info_back(3);
  info_back(0)  = Rfp;
  info_back(1)  = Rdfp;
@@ -622,7 +424,8 @@ vec GDMP::run_Rsolution_dt(double t_now, double goal, double ts, double sig, int
     double Rddfp ;
     double Ry0 = goal;
     double Rgoal = y0;
-    // fp_compute
+
+    /* Compute Rfp */
     if (i > (NSamples-1))
     {
         Rfp = f_prev  ; //same as prev or (NSamples-1)
@@ -634,27 +437,28 @@ vec GDMP::run_Rsolution_dt(double t_now, double goal, double ts, double sig, int
         double s = 0.0 ;
         for (int l = 0; l < BFs + extra_train; l++)
         {
-          s = s + w(l)*psi(l,NSamples - i - 1);
+          s = s + w(l)*psi(l,NSamples - i );
         }
         double gama = 1 - exp(-1000*t_now);
-        Rfp = gama*k*s + y0;
+        Rfp = k*s + y0;
         Rdfp =  (Rfp - f_prev)/ts;
         Rddfp = (Rdfp - df_prev)/ts;
     }
 
-    //y ref_compute
+    /* Compute R refs */
     double Ry_ref  = ks*(Rfp - Ry0d_hat) + Ry0;
     double Rdy_ref  = ks*Rdfp ;
     double Rddy_ref  = ks*Rddfp ;
 
-    // Euler Solution
+    /* Euler Solution dt*/
     Rdy(i) = Rddy(i-1)*ts + Rdy(i-1);
     Ry(i) = Rdy(i)*ts + Ry(i-1);
 
-    // dynamical system
+    /* Dynamical system dt*/
     double Rfs = Rddy_ref + D*Rdy_ref + K*(Ry_ref-Rgoal);
     Rddy(i) = K*(Rgoal-Ry(i)) - D*Rdy(i) + sig*Rfs;
 
+    /* keep it for the nect loop dt */
     vec info_back(3);
     info_back(0)  = Rfp;
     info_back(1)  = Rdfp;
@@ -663,10 +467,7 @@ vec GDMP::run_Rsolution_dt(double t_now, double goal, double ts, double sig, int
     return info_back;
 }
 
-
-
 /* fNyquist Function*/
-
 double GDMP::fNyquistFunc(double *original, int size, double fs, double T)
 {
   int L;

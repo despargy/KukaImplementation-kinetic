@@ -13,9 +13,9 @@ class CanonicalStructure
 
 		CanonicalStructure(int len);
 		~CanonicalStructure();
-    void generateFx(std::string kind, vector timed);
+    void generateFx(std::string kind,  vec timed);
     double getFx(double t);
-    void generateRfx(string kind, vec timed);
+    void generateRfx(string kind,  vec timed);
 	protected:
 };
 
