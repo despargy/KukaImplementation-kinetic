@@ -57,14 +57,14 @@ int main(int argc, char** argv)
   mat y_desired = readQ();
   infoFile <<"Load Data: DONE" << endl;
 
-  ofstream myFile;
-  std::ostringstream oss, ossd, ossdd;
-
-  oss << "CHECK/yreadQ.txt";
-
-  myFile.open((oss.str()).c_str());
-  myFile<<y_desired<<endl;
-  myFile.close();
+  // ofstream myFile;
+  // std::ostringstream oss, ossd, ossdd;
+  //
+  // oss << "CHECK/yreadQ.txt";
+  //
+  // myFile.open((oss.str()).c_str());
+  // myFile<<y_desired<<endl;
+  // myFile.close();
 
   int DataSize = y_desired.n_cols;
   dataFile<<kind<<endl;
@@ -134,7 +134,7 @@ int main(int argc, char** argv)
 
   /*  Solution  */
   static double TOTAL_DURATION = MAIN_TIME + EXTRA_TIME;
-  int extra_samples = EXTRA_TIME/ts;
+  int extra_samples = ceil(EXTRA_TIME/ts);
 
   infoFile <<"Solution Start " << endl;
   infoFile <<"Total Duration = "<<TOTAL_DURATION<< endl;
@@ -159,25 +159,33 @@ int main(int argc, char** argv)
 
    // vecs to help for set n' get position
    vec commanded_pos(7), measured_pos(7);
-   commanded_pos.zeros();
-   measured_pos.zeros();
+   commanded_pos = initial_config;
+   measured_pos = initial_config;
 
    // open file to store messures
-   ofstream messuresFile;
+   ofstream messuresFile, timeFile;
+
    messuresFile.open("Messures/robotJointPositions.txt");
+   timeFile.open("Messures/robotJointTime.txt");
+
+   measured_pos = robot->getJointPosition().toArma();
+   messuresFile<<measured_pos<<endl;
+   timeFile<<t<<endl;
 
    // Run Solution for each t
   infoFile <<"Solution of DMPs: START" << endl;
-  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME + ts); t = t + ts)
+  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME ); t = t + ts)
   {
     // get and store robot messures
      measured_pos = robot->getJointPosition().toArma();
+
      messuresFile<<measured_pos<<endl;
+     timeFile<<t<<endl;
 
      i++;
 
      // call for each DIM = 7 based on Quat
-     for (int d = 0; d < DIM; d++)
+     for (int d = 0; d < DIM-1; d++)
      {
        f_prev.col(d) = dmp[d].run_solution_dt(t, goal[d],  ts, sig(i), i, f_prev(0,d), f_prev(1,d), f_prev(2,d));
        commanded_pos(d) = dmp[d].y(i);
@@ -193,6 +201,7 @@ int main(int argc, char** argv)
 
   // close file stored messures from robot
   messuresFile.close();
+  timeFile.close();
 
   /* Save results*/
   for (int d = 0; d < DIM; d++)
@@ -217,17 +226,43 @@ int main(int argc, char** argv)
     myFile.open((ossdd.str()).c_str());
     myFile<<dmp[d].ddy<<endl;
     myFile.close();
+
+    oss << "CHECK/w" << d <<".log";
+
+    myFile.open((oss.str()).c_str());
+    myFile<<dmp[d].w<<endl;
+    myFile.close();
+
+    oss << "CHECK/psi" << d <<".log";
+
+    myFile.open((oss.str()).c_str());
+    myFile<<dmp[d].psi<<endl;
+    myFile.close();
+
+    oss << "CHECK/c" << d <<".log";
+
+    myFile.open((oss.str()).c_str());
+    myFile<<dmp[d].c<<endl;
+    myFile.close();
   }
 
 //////////////////////////////////////
 
   cout<<"FORWARD SOLUTION DONE"<<endl;
+
   // /* Initialize joints */
   // vec Rinitial_config = y_desired.col(DataSize-1);
   //
   // robot->setMode(arl::robot::Mode::POSITION_CONTROL);
   // robot->setJointTrajectory(Rinitial_config, 10);
+///////////////////////////////////////////
+  char c = 'e';
+  cout<<"before gotit"<<endl;
 
+  if ('R' == getchar()) // 27 is for ESC
+  {
+    cout<<"gotit"<<endl;
+  }
 ///////////////////////////////////////////
 
   /* Reverse Solution*/
@@ -254,17 +289,25 @@ int main(int argc, char** argv)
    Rmeasured_pos.zeros();
 
    // open file to store messures
-   ofstream RmessuresFile;
+   ofstream RmessuresFile, RtimeFile;
+
    RmessuresFile.open("Messures/RrobotJointPositions.txt");
+   RtimeFile.open("Messures/RrobotJointTime.txt");
+
+   Rmeasured_pos = robot->getJointPosition().toArma();
+   RmessuresFile<<Rmeasured_pos<<endl;
+   RtimeFile<<t<<endl;
 
    // Run RSolution for each t
   infoFile <<"RSolution of DMPs: START" << endl;
 
-  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME + ts); t = t + ts)
+  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME ); t = t + ts)
   {
      // get and store robot messures
      Rmeasured_pos = robot->getJointPosition().toArma();
+
      RmessuresFile<<Rmeasured_pos<<endl;
+     RtimeFile<<t<<endl;
 
      i++;
 

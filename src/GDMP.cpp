@@ -54,7 +54,7 @@ void GDMP::training(mat y_desired,mat dy_desired,mat ddy_desired, vec timed)
   NSamples = y_desired.n_cols;
   dt = timed(3)-timed(2);
   Tend = timed(NSamples-1);
-  extra_train = 100;
+  extra_train = 200; //round(NSamples/2);
 
   /* Reference Desired*/
   mat mat_refD(size(y_desired));
@@ -101,21 +101,6 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
     timed_ext[i] = i*dt ;
   }
 
-  double fd_original_fromSinc[NSamples+extra_train], tau = Tend, a = 10, b = a/4;
-
-  /* find original */
-  for (int i = 0; i < NSamples+extra_train; i++)
-  {
-    fd_original_fromSinc[i] = pow(tau,2) * ddy_ext[i] - a*(b*(1- exp(-4*timed_ext[i]))- tau*dy_ext[i]) ;
-  }
-
-  /* Nyquist - fc */
-  double fNyquist;
-  fNyquist = fNyquistFunc(fd_original_fromSinc, NSamples+extra_train, 1/dt, Tend );
-
-  BFs = round(Tend*fNyquist);
-  tNyq = 1/fNyquist;
-  Ns = ceil(NSamples/BFs);
 
   /* original signal */
   double fd_original_scaled[NSamples+extra_train];
@@ -125,7 +110,7 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
   double fd_filtered_ext[3*NSamples+extra_train];
 
   /* find original scaled */
-  for (int i = 0; i < NSamples; i++)
+  for (int i = 0; i < NSamples+extra_train; i++)
   {
     fd_original_scaled[i] = ks*(y_scaled_ext[i]-dy0) + y0;
   }
@@ -143,6 +128,27 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
   {
     fd_original_ext[i] = fd_original_scaled[NSamples+extra_train-1];
   }
+
+  double  tau = Tend, a = 10, b = a/4;
+
+  // /* find original */
+// double  fd_original_fromSinc[NSamples+extra_train],
+  // for (int i = 0; i < NSamples+extra_train; i++)
+  // {
+  //   fd_original_fromSinc[i] = pow(tau,2) * ddy_ext[i] - a*(b*(1- exp(-4*timed_ext[i]))- tau*dy_ext[i]) ;
+  // }
+
+  /* Nyquist - fc */
+  double fNyquist;
+  fNyquist = fNyquistFunc(fd_original_scaled, NSamples+extra_train, 1/dt, Tend );
+
+  BFs = round(Tend*fNyquist);
+  // if (BFs < 0)
+  //   BFs = 1;
+  cout<<BFs<<endl;
+  tNyq = 1/fNyquist;
+  Ns = ceil(NSamples/BFs);
+
 
   /* Lowpass Filter */
   LowPassFilter lpf((1/(2*tNyq)), dt);
@@ -512,11 +518,11 @@ double GDMP::fNyquistFunc(double *original, int size, double fs, double T)
     i++;
     energy_inter = energy_inter + abs(pow(Fd_original(i),2));
   }
-  cout<<i<<endl;
+  // cout<<i<<endl;
   double fNyq ;
 
-  if ( i == -1)
-    fNyq = 2*f[int(L/2)];
+  if ( i < 0)
+    fNyq = 2*f[1];
   else
     fNyq = 2*f[i];
 
