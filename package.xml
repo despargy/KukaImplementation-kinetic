@@ -15,12 +15,14 @@
   <build_depend>autharl_core</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>lwr_robot</build_depend>
-
+  <build_depend>sigproc_lib</build_depend>
   <build_export_depend>autharl_core</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
 
+
   <exec_depend>autharl_core</exec_depend>
   <exec_depend>roscpp</exec_depend>
+  <exec_depend>sigproc_lib</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

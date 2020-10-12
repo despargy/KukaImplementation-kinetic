@@ -124,6 +124,7 @@ int main(int argc, char** argv)
 
   for (int d = 0; d < DIM; d++)
   {
+    dmp[d].id = d;
     dmp[d].training(y_desired.row(d),dy_desired.row(d),ddy_desired.row(d),timed);
     dataFile<<"id:"<<d<<'\t'<<"BFs = "<<dmp[d].BFs<<endl;
   }
@@ -146,16 +147,11 @@ int main(int argc, char** argv)
 
   /*init_solution for each dmp*/
   infoFile <<"InitSolution of DMPs: START" << endl;
-
   for (int d = 0; d < DIM; d++)
   {
     f_prev.col(d) = dmp[d].init_solution_dt(goal[d], cs, MAIN_TIME,  extra_samples, t, i);
   }
   infoFile <<"InitSolution of DMPs: DONE" << endl;
-
-   /* fix sigmoid*/
-   mat tsig = linspace(-MAIN_TIME-10,EXTRA_TIME,DataSize+extra_samples);
-   mat sig = 1-1/(1+exp(-tsig));
 
    // vecs to help for set n' get position
    vec commanded_pos(7), measured_pos(7);
@@ -174,7 +170,7 @@ int main(int argc, char** argv)
 
    // Run Solution for each t
   infoFile <<"Solution of DMPs: START" << endl;
-  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME ); t = t + ts)
+  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME + ts); t = t + ts)
   {
     // get and store robot messures
      measured_pos = robot->getJointPosition().toArma();
@@ -185,9 +181,9 @@ int main(int argc, char** argv)
      i++;
 
      // call for each DIM = 7 based on Quat
-     for (int d = 0; d < DIM-1; d++)
+     for (int d = 0; d < DIM; d++)
      {
-       f_prev.col(d) = dmp[d].run_solution_dt(t, goal[d],  ts, sig(i), i, f_prev(0,d), f_prev(1,d), f_prev(2,d));
+       f_prev.col(d) = dmp[d].run_solution_dt(t, goal[d], ts,  i, f_prev(0,d), f_prev(1,d), f_prev(2,d));
        commanded_pos(d) = dmp[d].y(i);
      }
 
@@ -207,42 +203,52 @@ int main(int argc, char** argv)
   for (int d = 0; d < DIM; d++)
   {
     ofstream myFile;
-    std::ostringstream oss, ossd, ossdd;
+    std::ostringstream oss, ossd, ossdd, ossw, ossc, osspsi;
 
     oss << "CHECK/y" << d <<".log";
 
     myFile.open((oss.str()).c_str());
-    myFile<<dmp[d].y<<endl;
+    for (int i = 0; i < dmp[d].NSamples; i++)
+      myFile<<dmp[d].y(i)<<endl;
     myFile.close();
 
     ossd << "CHECK/dy" << d <<".log";
 
     myFile.open((ossd.str()).c_str());
-    myFile<<dmp[d].dy<<endl;
+    for (int i = 0; i < dmp[d].NSamples; i++)
+      myFile<<dmp[d].dy(i)<<endl;
     myFile.close();
 
     ossdd << "CHECK/ddy" << d <<".log";
 
     myFile.open((ossdd.str()).c_str());
-    myFile<<dmp[d].ddy<<endl;
+    for (int i = 0; i < dmp[d].NSamples; i++)
+      myFile<<dmp[d].ddy(i)<<endl;
     myFile.close();
 
-    oss << "CHECK/w" << d <<".log";
+    ossw << "CHECK/w" << d <<".log";
 
-    myFile.open((oss.str()).c_str());
-    myFile<<dmp[d].w<<endl;
+    myFile.open((ossw.str()).c_str());
+    for (int i = 0; i < dmp[d].BFs; i++)
+      myFile<<dmp[d].w(i)<<endl;
     myFile.close();
 
-    oss << "CHECK/psi" << d <<".log";
+    osspsi << "CHECK/psi" << d <<".log";
 
-    myFile.open((oss.str()).c_str());
-    myFile<<dmp[d].psi<<endl;
+    myFile.open((osspsi.str()).c_str());
+    for (int b = 0; b <dmp[d].BFs; b++)
+    {
+      for (int i = 0; i < dmp[d].NSamples+dmp[d].extra_train; i++)
+        myFile<<dmp[d].psi(b,i)<<'\t';
+      myFile<<endl;
+    }
     myFile.close();
 
-    oss << "CHECK/c" << d <<".log";
+    ossc << "CHECK/c" << d <<".log";
 
-    myFile.open((oss.str()).c_str());
-    myFile<<dmp[d].c<<endl;
+    myFile.open((ossc.str()).c_str());
+    for (int i = 0; i < dmp[d].BFs; i++)
+      myFile<<dmp[d].c(i)<<endl;
     myFile.close();
   }
 
@@ -279,10 +285,6 @@ int main(int argc, char** argv)
   }
   infoFile <<"InitSolution of DMPs: DONE" << endl;
 
-   /* fix sigmoid*/
-   tsig = linspace(-MAIN_TIME-10,EXTRA_TIME,DataSize+extra_samples);
-   sig = 1-1/(1+exp(-tsig));
-
    // vecs to help for set n' get position
    vec Rcommanded_pos(7), Rmeasured_pos(7);
    Rcommanded_pos.zeros();
@@ -301,7 +303,7 @@ int main(int argc, char** argv)
    // Run RSolution for each t
   infoFile <<"RSolution of DMPs: START" << endl;
 
-  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME ); t = t + ts)
+  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME + ts); t = t + ts)
   {
      // get and store robot messures
      Rmeasured_pos = robot->getJointPosition().toArma();
@@ -313,7 +315,7 @@ int main(int argc, char** argv)
 
      for (int d = 0; d < DIM; d++)
      {
-       Rf_prev.col(d) = dmp[d].run_Rsolution_dt(t, goal[d],  ts, sig(i), i, Rf_prev(0,d), Rf_prev(1,d), Rf_prev(2,d));
+       Rf_prev.col(d) = dmp[d].run_Rsolution_dt(t, goal[d],  ts, i, Rf_prev(0,d), Rf_prev(1,d), Rf_prev(2,d));
        Rcommanded_pos(d) = dmp[d].Ry(i);
      }
 
@@ -337,19 +339,22 @@ int main(int argc, char** argv)
     oss << "CHECK/Ry" << d <<".log";
 
     myFile.open((oss.str()).c_str());
-    myFile<<dmp[d].Ry<<endl;
+    for (int i = 0; i < dmp[d].NSamples; i++)
+      myFile<<dmp[d].Ry(i)<<endl;
     myFile.close();
 
     ossd << "CHECK/Rdy" << d <<".log";
 
     myFile.open((ossd.str()).c_str());
-    myFile<<dmp[d].Rdy<<endl;
+    for (int i = 0; i < dmp[d].NSamples; i++)
+      myFile<<dmp[d].Rdy(i)<<endl;
     myFile.close();
 
     ossdd << "CHECK/Rddy" << d <<".log";
 
     myFile.open((ossdd.str()).c_str());
-    myFile<<dmp[d].Rddy<<endl;
+    for (int i = 0; i < dmp[d].NSamples; i++)
+      myFile<<dmp[d].Rddy(i)<<endl;
     myFile.close();
   }
   cout<<"REVERSE SOLUTION DONE"<<endl;

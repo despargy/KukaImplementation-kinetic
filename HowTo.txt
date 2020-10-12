@@ -1,0 +1,8 @@
+
+Colletor 
+
+
+Master
+ #  roslaunch autharl_description display.launch 
+ #  roscd kuka_implementation/src/
+ #  rosrun kuka_implementation master 
