@@ -170,7 +170,7 @@ int main(int argc, char** argv)
 
    // Run Solution for each t
   infoFile <<"Solution of DMPs: START" << endl;
-  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME + ts); t = t + ts)
+  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME+ ts); t = t + ts)
   {
     // get and store robot messures
      measured_pos = robot->getJointPosition().toArma();
@@ -199,60 +199,6 @@ int main(int argc, char** argv)
   messuresFile.close();
   timeFile.close();
 
-  /* Save results*/
-  for (int d = 0; d < DIM; d++)
-  {
-    ofstream myFile;
-    std::ostringstream oss, ossd, ossdd, ossw, ossc, osspsi;
-
-    oss << "CHECK/y" << d <<".log";
-
-    myFile.open((oss.str()).c_str());
-    for (int i = 0; i < dmp[d].NSamples; i++)
-      myFile<<dmp[d].y(i)<<endl;
-    myFile.close();
-
-    ossd << "CHECK/dy" << d <<".log";
-
-    myFile.open((ossd.str()).c_str());
-    for (int i = 0; i < dmp[d].NSamples; i++)
-      myFile<<dmp[d].dy(i)<<endl;
-    myFile.close();
-
-    ossdd << "CHECK/ddy" << d <<".log";
-
-    myFile.open((ossdd.str()).c_str());
-    for (int i = 0; i < dmp[d].NSamples; i++)
-      myFile<<dmp[d].ddy(i)<<endl;
-    myFile.close();
-
-    ossw << "CHECK/w" << d <<".log";
-
-    myFile.open((ossw.str()).c_str());
-    for (int i = 0; i < dmp[d].BFs; i++)
-      myFile<<dmp[d].w(i)<<endl;
-    myFile.close();
-
-    osspsi << "CHECK/psi" << d <<".log";
-
-    myFile.open((osspsi.str()).c_str());
-    for (int b = 0; b <dmp[d].BFs; b++)
-    {
-      for (int i = 0; i < dmp[d].NSamples+dmp[d].extra_train; i++)
-        myFile<<dmp[d].psi(b,i)<<'\t';
-      myFile<<endl;
-    }
-    myFile.close();
-
-    ossc << "CHECK/c" << d <<".log";
-
-    myFile.open((ossc.str()).c_str());
-    for (int i = 0; i < dmp[d].BFs; i++)
-      myFile<<dmp[d].c(i)<<endl;
-    myFile.close();
-  }
-
-//////////////////////////////////////
 
   cout<<"FORWARD SOLUTION DONE"<<endl;
 
@@ -262,13 +208,13 @@ int main(int argc, char** argv)
   // robot->setMode(arl::robot::Mode::POSITION_CONTROL);
   // robot->setJointTrajectory(Rinitial_config, 10);
 ///////////////////////////////////////////
-  char c = 'e';
-  cout<<"before gotit"<<endl;
-
-  if ('R' == getchar()) // 27 is for ESC
-  {
-    cout<<"gotit"<<endl;
-  }
+  // char c = 'e';
+  // cout<<"before gotit"<<endl;
+  //
+  // if ('R' == getchar()) // 27 is for ESC
+  // {
+  //   cout<<"gotit"<<endl;
+  // }
 ///////////////////////////////////////////
 
   /* Reverse Solution*/
@@ -329,7 +275,63 @@ int main(int argc, char** argv)
 
   // close file stored messures from robot
   RmessuresFile.close();
+  
+  cout<<"REVERSE SOLUTION DONE"<<endl;
 
+    /* Save results*/
+    for (int d = 0; d < DIM; d++)
+    {
+      ofstream myFile;
+      std::ostringstream oss, ossd, ossdd, ossw, ossc, osspsi;
+
+      oss << "CHECK/y" << d <<".log";
+
+      myFile.open((oss.str()).c_str());
+      for (int i = 0; i < dmp[d].NSamples; i++)
+        myFile<<dmp[d].y(i)<<endl;
+      myFile.close();
+
+      ossd << "CHECK/dy" << d <<".log";
+
+      myFile.open((ossd.str()).c_str());
+      for (int i = 0; i < dmp[d].NSamples; i++)
+        myFile<<dmp[d].dy(i)<<endl;
+      myFile.close();
+
+      ossdd << "CHECK/ddy" << d <<".log";
+
+      myFile.open((ossdd.str()).c_str());
+      for (int i = 0; i < dmp[d].NSamples; i++)
+        myFile<<dmp[d].ddy(i)<<endl;
+      myFile.close();
+
+      ossw << "CHECK/w" << d <<".log";
+
+      myFile.open((ossw.str()).c_str());
+      for (int i = 0; i < dmp[d].BFs; i++)
+        myFile<<dmp[d].w(i)<<endl;
+      myFile.close();
+
+      osspsi << "CHECK/psi" << d <<".log";
+
+      myFile.open((osspsi.str()).c_str());
+      for (int b = 0; b <dmp[d].BFs; b++)
+      {
+        for (int i = 0; i < dmp[d].NSamples+dmp[d].extra_train; i++)
+          myFile<<dmp[d].psi(b,i)<<'\t';
+        myFile<<endl;
+      }
+      myFile.close();
+
+      ossc << "CHECK/c" << d <<".log";
+
+      myFile.open((ossc.str()).c_str());
+      for (int i = 0; i < dmp[d].BFs; i++)
+        myFile<<dmp[d].c(i)<<endl;
+      myFile.close();
+    }
+
+  //////////////////////////////////////
   /* Save Rresults*/
   for (int d = 0; d < DIM; d++)
   {
@@ -357,7 +359,6 @@ int main(int argc, char** argv)
       myFile<<dmp[d].Rddy(i)<<endl;
     myFile.close();
   }
-  cout<<"REVERSE SOLUTION DONE"<<endl;
 
   /* End time*/
   gettimeofday (&endwtime, NULL);

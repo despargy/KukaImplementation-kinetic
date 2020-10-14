@@ -84,7 +84,7 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
 
   /* sig y_desired to 0*/
   mat tsig = linspace(-Tend-extra_train*dt,extra_train*dt,NSamples+extra_train);
-  mat sig = 1-1/(1+exp(-0.02/dt*tsig));
+  mat sig = 1-1/(1+exp(-0.08/dt*tsig));
 
   double y_scaled_ext[NSamples+extra_train], dy_ext[NSamples+extra_train], ddy_ext[NSamples+extra_train], timed_ext[NSamples+extra_train];
 

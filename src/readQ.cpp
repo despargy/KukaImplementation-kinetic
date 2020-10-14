@@ -11,8 +11,8 @@ mat readQ()
 
   /* read */
 
-    std::ifstream ifile("Collector/posmat.txt", std::ios::in);
-    // std::ifstream ifile("Collector/posCollected.txt", std::ios::in);
+    // std::ifstream ifile("Collector/posmat.txt", std::ios::in);
+    std::ifstream ifile("Collector/posCollected_cut.txt", std::ios::in);
 
     std::vector<double> scores;
 
