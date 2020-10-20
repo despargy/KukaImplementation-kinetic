@@ -15,13 +15,13 @@ class GDMP
 {
 public:
 
-  int BFs, NSamples, extra_train, Ns, id;
+  int BFs, NSamples, extra_train, Ns, id, window;
   double tNyq, dt, Tend;
   double y0, dy0, g, y0d_hat, gd_hat, Ry0d_hat, Rgd_hat;
   double az, bz, K, D, k, ks, kt;
 
   mat c, h, psi, w;
-  mat y, dy, ddy;
+  mat y, dy, ddy, y_smoothed, Ry_smoothed;
   mat Ry, Rdy, Rddy;
 
   GDMP();
@@ -103,23 +103,6 @@ mat GDMP::find_reference_desired(mat y_desired,mat dy_desired,mat ddy_desired, v
     ddy_ext[i] = sig(i)*ddy_desired(NSamples-1);
     timed_ext[i] = i*dt ;
   }
-
-  /* Printed in files for CHECK*/
-  ofstream myFile1;
-
-  std::ostringstream oss1;
-
-  oss1 << "CHECK/sig" << id <<".log";
-  myFile1.open((oss1.str()).c_str());
-  for (int i = 0; i < NSamples+extra_train; i++)
-    myFile1<<sig[i]<<endl;
-  myFile1.close();
-
-  oss1 << "CHECK/tsig" << id <<".log";
-  myFile1.open((oss1.str()).c_str());
-  for (int i = 0; i < NSamples+extra_train; i++)
-    myFile1<<tsig[i]<<endl;
-  myFile1.close();
 
   /* original signal */
   double fd_original_scaled[NSamples+extra_train];
@@ -546,9 +529,12 @@ double GDMP::fNyquistFunc(double *original, int size, double fs, double T)
   double fNyq ;
 
   if ( i < 0)
-    fNyq = 2*f[1];
+  {
+      fNyq = 2*f[1];
+  }
   else
-    fNyq = 2*f[i];
-
+  {
+      fNyq = 2*f[i];
+  }
   return fNyq;
 }

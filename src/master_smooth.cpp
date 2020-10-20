@@ -15,7 +15,7 @@
 #include <thread>
 #include <autharl_core>
 #include <lwr_robot/robot.h>
-
+#include "filters_smooth.cpp"
 
 using namespace std;
 using namespace arma;
@@ -132,6 +132,7 @@ int main(int argc, char** argv)
   infoFile <<"Training of DMPs: DONE" << endl;
 
 //////////////////////////////////////////////////////////////////////////////
+                  ////////////FORWARD//////////
 
   /*  Solution  */
   static double TOTAL_DURATION = MAIN_TIME + EXTRA_TIME;
@@ -153,30 +154,10 @@ int main(int argc, char** argv)
   }
   infoFile <<"InitSolution of DMPs: DONE" << endl;
 
-   // vecs to help for set n' get position
-   vec commanded_pos(7), measured_pos(7);
-   commanded_pos = initial_config;
-   measured_pos = initial_config;
-
-   // open file to store messures
-   ofstream messuresFile, timeFile;
-
-   messuresFile.open("Messures/robotJointPositions.txt");
-   timeFile.open("Messures/robotJointTime.txt");
-
-   measured_pos = robot->getJointPosition().toArma();
-   messuresFile<<measured_pos<<endl;
-   timeFile<<t<<endl;
-
    // Run Solution for each t
   infoFile <<"Solution of DMPs: START" << endl;
   for( t = ts ; t < (MAIN_TIME + EXTRA_TIME+ ts); t = t + ts)
   {
-    // get and store robot messures
-     measured_pos = robot->getJointPosition().toArma();
-
-     messuresFile<<measured_pos<<endl;
-     timeFile<<t<<endl;
 
      i++;
 
@@ -184,38 +165,15 @@ int main(int argc, char** argv)
      for (int d = 0; d < DIM; d++)
      {
        f_prev.col(d) = dmp[d].run_solution_dt(t, goal[d], ts,  i, f_prev(0,d), f_prev(1,d), f_prev(2,d));
-       commanded_pos(d) = dmp[d].y(i);
      }
 
-     // // set new position
-     robot->setJointPosition(commanded_pos);
-     //
-     // // wait for next robot cycle
-     robot->waitNextCycle();
   }
   infoFile <<"Solution of DMPs: DONE" << endl;
 
-  // close file stored messures from robot
-  messuresFile.close();
-  timeFile.close();
-
-
   cout<<"FORWARD SOLUTION DONE"<<endl;
 
-  // /* Initialize joints */
-  // vec Rinitial_config = y_desired.col(DataSize-1);
-  //
-  // robot->setMode(arl::robot::Mode::POSITION_CONTROL);
-  // robot->setJointTrajectory(Rinitial_config, 10);
-///////////////////////////////////////////
-  // char c = 'e';
-  // cout<<"before gotit"<<endl;
-  //
-  // if ('R' == getchar()) // 27 is for ESC
-  // {
-  //   cout<<"gotit"<<endl;
-  // }
-///////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+                    ////////////REVERSE//////////
 
   /* Reverse Solution*/
   i  = 0;
@@ -231,52 +189,28 @@ int main(int argc, char** argv)
   }
   infoFile <<"InitSolution of DMPs: DONE" << endl;
 
-   // vecs to help for set n' get position
-   vec Rcommanded_pos(7), Rmeasured_pos(7);
-   Rcommanded_pos.zeros();
-   Rmeasured_pos.zeros();
-
-   // open file to store messures
-   ofstream RmessuresFile, RtimeFile;
-
-   RmessuresFile.open("Messures/RrobotJointPositions.txt");
-   RtimeFile.open("Messures/RrobotJointTime.txt");
-
-   Rmeasured_pos = robot->getJointPosition().toArma();
-   RmessuresFile<<Rmeasured_pos<<endl;
-   RtimeFile<<t<<endl;
 
    // Run RSolution for each t
   infoFile <<"RSolution of DMPs: START" << endl;
 
   for( t = ts ; t < (MAIN_TIME + EXTRA_TIME + ts); t = t + ts)
   {
-     // get and store robot messures
-     Rmeasured_pos = robot->getJointPosition().toArma();
-
-     RmessuresFile<<Rmeasured_pos<<endl;
-     RtimeFile<<t<<endl;
 
      i++;
 
      for (int d = 0; d < DIM; d++)
      {
        Rf_prev.col(d) = dmp[d].run_Rsolution_dt(t, goal[d],  ts, i, Rf_prev(0,d), Rf_prev(1,d), Rf_prev(2,d));
-       Rcommanded_pos(d) = dmp[d].Ry(i);
      }
 
-    // set new position
-    robot->setJointPosition(Rcommanded_pos);
-
-    // wait for next robot cycle
-    robot->waitNextCycle();
   }
   infoFile <<"RSolution of DMPs: DONE" << endl;
 
-  // close file stored messures from robot
-  RmessuresFile.close();
-
   cout<<"REVERSE SOLUTION DONE"<<endl;
+
+  //////////////////////////////////////////////////////////////////////////////
+                    ////////////RESULTS//////////
+cout<<"SAVE RESULTS START"<<endl;
 
     /* Save results*/
     for (int d = 0; d < DIM; d++)
@@ -359,6 +293,259 @@ int main(int argc, char** argv)
       myFile<<dmp[d].Rddy(i)<<endl;
     myFile.close();
   }
+
+  cout<<"SAVE RESULTS DONE"<<endl;
+
+  //////////////////////////////////////////////////////////////////////////////
+                    ////////////FILTERING//////////
+
+  Filter fsm(1);
+  for (int d = 0; d < DIM; d++)
+  {
+    int window = round(2*dmp[d].tNyq/dmp[d].dt);
+    int half_w = ceil(window/2)+1;
+    int N = 2*half_w + dmp[d].y.n_cols ;
+
+    cout<<window<<endl;
+    cout<<half_w<<endl;
+    cout<<dmp[d].y.n_cols<<endl;
+
+    fsm.setNcoeffs(window);
+    mat sig_in(1, N);
+    mat sig_out(1,N);
+
+    for (int i = 0; i < half_w ; i++)
+    {
+      sig_in(0,i) = dmp[d].y(0);
+    }
+    for (int i = 0; i < dmp[d].y.n_cols ; i++)
+    {
+      sig_in(0,i+half_w) = dmp[d].y(i);
+    }
+    for (int i = 0; i < half_w ; i++)
+    {
+      sig_in(0, dmp[d].y.n_cols + half_w + i) = dmp[d].y( dmp[d].y.n_cols - 1 );
+    }
+
+    sig_out = fsm.filterOffline(sig_in);
+
+    ofstream myFile;
+    std::ostringstream osssigout, oss_sm;
+    osssigout << "CHECK/sig_in" << d <<".log";
+    myFile.open((osssigout.str()).c_str());
+    for (int i = 0; i < N; i++)
+      myFile<<sig_in(i)<<endl;
+    myFile.close();
+
+    osssigout << "CHECK/sig_out" << d <<".log";
+    myFile.open((osssigout.str()).c_str());
+    for (int i = 0; i < N; i++)
+      myFile<<sig_out(i)<<endl;
+    myFile.close();
+
+    dmp[d].y_smoothed.set_size(1,dmp[d].y.n_cols);
+    for (int i = 0; i < dmp[d].y.n_cols ; i++)
+    {
+      dmp[d].y_smoothed(0,i) = sig_out(0,i+half_w);
+    }
+
+    oss_sm << "CHECK/y_smoothed" << d <<".log";
+    myFile.open((oss_sm.str()).c_str());
+    for (int i = 0; i < dmp[d].y.n_cols; i++)
+      myFile<<dmp[d].y_smoothed(i)<<endl;
+    myFile.close();
+
+  }
+
+  Filter Rfsm(1);
+  for (int d = 0; d < DIM; d++)
+  {
+    int window = round(2*dmp[d].tNyq/dmp[d].dt);
+    int half_w = ceil(window/2)+1;
+    int N = 2*half_w + dmp[d].Ry.n_cols ;
+
+    cout<<window<<endl;
+    cout<<half_w<<endl;
+    cout<<dmp[d].Ry.n_cols<<endl;
+
+    Rfsm.setNcoeffs(window);
+    mat sig_in(1, N);
+    mat sig_out(1,N);
+
+    for (int i = 0; i < half_w ; i++)
+    {
+      sig_in(0,i) = dmp[d].Ry(0);
+    }
+    for (int i = 0; i < dmp[d].Ry.n_cols ; i++)
+    {
+      sig_in(0,i+half_w) = dmp[d].Ry(i);
+    }
+    for (int i = 0; i < half_w ; i++)
+    {
+      sig_in(0, dmp[d].Ry.n_cols + half_w + i) = dmp[d].Ry( dmp[d].Ry.n_cols - 1 );
+    }
+
+    sig_out = Rfsm.filterOffline(sig_in);
+
+    ofstream myFile;
+    std::ostringstream osssigout, oss_sm;
+    osssigout << "CHECK/Rsig_in" << d <<".log";
+    myFile.open((osssigout.str()).c_str());
+    for (int i = 0; i < N; i++)
+      myFile<<sig_in(i)<<endl;
+    myFile.close();
+
+    osssigout << "CHECK/Rsig_out" << d <<".log";
+    myFile.open((osssigout.str()).c_str());
+    for (int i = 0; i < N; i++)
+      myFile<<sig_out(i)<<endl;
+    myFile.close();
+
+    dmp[d].Ry_smoothed.set_size(1,dmp[d].Ry.n_cols);
+    for (int i = 0; i < dmp[d].Ry.n_cols ; i++)
+    {
+      dmp[d].Ry_smoothed(0,i) = sig_out(0,i+half_w);
+    }
+
+    oss_sm << "CHECK/Ry_smoothed" << d <<".log";
+    myFile.open((oss_sm.str()).c_str());
+    for (int i = 0; i < dmp[d].Ry.n_cols; i++)
+      myFile<<dmp[d].Ry_smoothed(i)<<endl;
+    myFile.close();
+
+  }
+
+    //////////////////////////////////////////////////////////////////////////////
+                      ////////////EXECUTION//////////
+
+
+  /*  Forward Execution  */
+  TOTAL_DURATION = MAIN_TIME + EXTRA_TIME;
+  extra_samples = ceil(EXTRA_TIME/ts);
+
+  infoFile <<"Solution Start " << endl;
+  infoFile <<"Total Duration = "<<TOTAL_DURATION<< endl;
+  infoFile <<"Extra Time = " <<EXTRA_TIME<< endl;
+
+  i  = 0;
+  t = 0;
+
+  /*init_solution for each dmp*/
+  infoFile <<"Execution of DMPs: START" << endl;
+
+
+   // vecs to help for set n' get position
+   vec commanded_pos(7), measured_pos(7);
+   commanded_pos = initial_config;
+   measured_pos = initial_config;
+
+   // open file to store messures
+   ofstream messuresFile, timeFile;
+
+   messuresFile.open("Messures/robotJointPositions_s.txt");
+   timeFile.open("Messures/robotJointTime_s.txt");
+
+   measured_pos = robot->getJointPosition().toArma();
+   messuresFile<<measured_pos<<endl;
+   timeFile<<t<<endl;
+
+   // Run Execution for each t
+  infoFile <<"Execution of DMPs: START" << endl;
+  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME+ ts); t = t + ts)
+  {
+    // get and store robot messures
+     measured_pos = robot->getJointPosition().toArma();
+
+     messuresFile<<measured_pos<<endl;
+     timeFile<<t<<endl;
+
+     i++;
+
+     // call for each DIM = 7 based on Quat
+     for (int d = 0; d < DIM; d++)
+     {
+       commanded_pos(d) = dmp[d].y_smoothed(i);
+     }
+
+     // // set new position
+     robot->setJointPosition(commanded_pos);
+     //
+     // // wait for next robot cycle
+     robot->waitNextCycle();
+  }
+  infoFile <<"Execution of DMPs: DONE" << endl;
+
+  // close file stored messures from robot
+  messuresFile.close();
+  timeFile.close();
+
+
+  cout<<"FORWARD EXECUTION DONE"<<endl;
+
+  ///////////////////////////////////////////
+    // char c = 'e';
+    // cout<<"before gotit"<<endl;
+    //
+    // if ('R' == getchar()) // 27 is for ESC
+    // {
+    //   cout<<"gotit"<<endl;
+    // }
+    //////////////////////////////////////////
+
+  /* Reverse Execution*/
+  i  = 0;
+  t = 0;
+
+  /*init_Rsolution for each dmp*/
+  infoFile <<"R Execution of DMPs: START" << endl;
+
+   // vecs to help for set n' get position
+   vec Rcommanded_pos(7), Rmeasured_pos(7);
+   Rcommanded_pos.zeros();
+   Rmeasured_pos.zeros();
+
+   // open file to store messures
+   ofstream RmessuresFile, RtimeFile;
+
+   RmessuresFile.open("Messures/RrobotJointPositions_s.txt");
+   RtimeFile.open("Messures/RrobotJointTime_s.txt");
+
+   Rmeasured_pos = robot->getJointPosition().toArma();
+   RmessuresFile<<Rmeasured_pos<<endl;
+   RtimeFile<<t<<endl;
+
+   // Run RSolution for each t
+  infoFile <<"R Execution of DMPs: START" << endl;
+
+  for( t = ts ; t < (MAIN_TIME + EXTRA_TIME + ts); t = t + ts)
+  {
+     // get and store robot messures
+     Rmeasured_pos = robot->getJointPosition().toArma();
+
+     RmessuresFile<<Rmeasured_pos<<endl;
+     RtimeFile<<t<<endl;
+
+     i++;
+
+     for (int d = 0; d < DIM; d++)
+     {
+       Rcommanded_pos(d) = dmp[d].Ry_smoothed(i);
+     }
+
+    // set new position
+    robot->setJointPosition(Rcommanded_pos);
+
+    // wait for next robot cycle
+    robot->waitNextCycle();
+  }
+  infoFile <<"R Execution of DMPs: DONE" << endl;
+
+  // close file stored messures from robot
+  RmessuresFile.close();
+
+  cout<<"REVERSE Execution DONE"<<endl;
+
+
 
   /* End time*/
   gettimeofday (&endwtime, NULL);

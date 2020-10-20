@@ -15,7 +15,7 @@
 #include <thread>
 #include <autharl_core>
 #include <lwr_robot/robot.h>
-
+#include "filters_smooth.cpp"
 
 using namespace std;
 using namespace arma;
@@ -132,8 +132,9 @@ int main(int argc, char** argv)
   infoFile <<"Training of DMPs: DONE" << endl;
 
 //////////////////////////////////////////////////////////////////////////////
+                  ////////////SOLUTION//////////
 
-  /*  Solution  */
+  /*  Forward Solution  */
   static double TOTAL_DURATION = MAIN_TIME + EXTRA_TIME;
   int extra_samples = ceil(EXTRA_TIME/ts);
 
@@ -145,11 +146,19 @@ int main(int argc, char** argv)
   double t = 0;
   mat f_prev(3,DIM);
 
+  Filter fsm[DIM](1);
+  for (int d = 0; d < DIM-1; d++)
+  {
+    int window = round(2*dmp[d].tNyq/dmp[d].dt);
+    fsm[d].setNcoeffs(window);
+  }
   /*init_solution for each dmp*/
   infoFile <<"InitSolution of DMPs: START" << endl;
   for (int d = 0; d < DIM; d++)
   {
     f_prev.col(d) = dmp[d].init_solution_dt(goal[d], cs, MAIN_TIME,  extra_samples, t, i);
+    dmp[d].y_smoothed.set_size(size(dmp[d].y));
+    dmp[d].y_smoothed(0)= dmp[d].y(0);
   }
   infoFile <<"InitSolution of DMPs: DONE" << endl;
 
@@ -161,8 +170,8 @@ int main(int argc, char** argv)
    // open file to store messures
    ofstream messuresFile, timeFile;
 
-   messuresFile.open("Messures/robotJointPositions.txt");
-   timeFile.open("Messures/robotJointTime.txt");
+   messuresFile.open("Messures/robotJointPositions_so.txt");
+   timeFile.open("Messures/robotJointTime_so.txt");
 
    measured_pos = robot->getJointPosition().toArma();
    messuresFile<<measured_pos<<endl;
@@ -184,9 +193,9 @@ int main(int argc, char** argv)
      for (int d = 0; d < DIM; d++)
      {
        f_prev.col(d) = dmp[d].run_solution_dt(t, goal[d], ts,  i, f_prev(0,d), f_prev(1,d), f_prev(2,d));
-       commanded_pos(d) = dmp[d].y(i);
+       dmp[d].y_smoothed(i) = fsm[d].filterOnline(dmp[d].y, i);
+       commanded_pos(d) = dmp[d].y_smoothed(i);
      }
-
      // // set new position
      robot->setJointPosition(commanded_pos);
      //
@@ -228,6 +237,8 @@ int main(int argc, char** argv)
   for (int d = 0; d < DIM; d++)
   {
     Rf_prev.col(d) = dmp[d].init_Rsolution_dt(goal[d], cs, MAIN_TIME,  extra_samples, t, i);
+    dmp[d].Ry_smoothed.set_size(size(dmp[d].y));
+    dmp[d].Ry_smoothed(0)= dmp[d].Ry(0);
   }
   infoFile <<"InitSolution of DMPs: DONE" << endl;
 
@@ -239,8 +250,8 @@ int main(int argc, char** argv)
    // open file to store messures
    ofstream RmessuresFile, RtimeFile;
 
-   RmessuresFile.open("Messures/RrobotJointPositions.txt");
-   RtimeFile.open("Messures/RrobotJointTime.txt");
+   RmessuresFile.open("Messures/RrobotJointPositions_so.txt");
+   RtimeFile.open("Messures/RrobotJointTime_so.txt");
 
    Rmeasured_pos = robot->getJointPosition().toArma();
    RmessuresFile<<Rmeasured_pos<<endl;
@@ -262,7 +273,8 @@ int main(int argc, char** argv)
      for (int d = 0; d < DIM; d++)
      {
        Rf_prev.col(d) = dmp[d].run_Rsolution_dt(t, goal[d],  ts, i, Rf_prev(0,d), Rf_prev(1,d), Rf_prev(2,d));
-       Rcommanded_pos(d) = dmp[d].Ry(i);
+       dmp[d].Ry_smoothed(i) = fsm[d].filterOnline(dmp[d].Ry, i);
+       Rcommanded_pos(d) = dmp[d].Ry_smoothed(i);
      }
 
     // set new position
@@ -277,12 +289,15 @@ int main(int argc, char** argv)
   RmessuresFile.close();
 
   cout<<"REVERSE SOLUTION DONE"<<endl;
+  //////////////////////////////////////////////////////////////////////////////
+                    ////////////RESULTS//////////
+cout<<"SAVE RESULTS START"<<endl;
 
     /* Save results*/
     for (int d = 0; d < DIM; d++)
     {
       ofstream myFile;
-      std::ostringstream oss, ossd, ossdd, ossw, ossc, osspsi;
+      std::ostringstream oss, ossd, ossdd, ossw, ossc, osspsi, oss_sm;
 
       oss << "CHECK/y" << d <<".log";
 
@@ -329,6 +344,14 @@ int main(int argc, char** argv)
       for (int i = 0; i < dmp[d].BFs; i++)
         myFile<<dmp[d].c(i)<<endl;
       myFile.close();
+
+      oss_sm << "CHECK/y_smoothed" << d <<".log";
+
+      myFile.open((oss_sm.str()).c_str());
+      for (int i = 0; i < dmp[d].y.n_cols; i++)
+        myFile<<dmp[d].y_smoothed(i)<<endl;
+      myFile.close();
+
     }
 
   //////////////////////////////////////
@@ -336,7 +359,7 @@ int main(int argc, char** argv)
   for (int d = 0; d < DIM; d++)
   {
     ofstream myFile;
-    std::ostringstream oss, ossd, ossdd;
+    std::ostringstream oss, ossd, ossdd, oss_sm;
 
     oss << "CHECK/Ry" << d <<".log";
 
@@ -358,7 +381,16 @@ int main(int argc, char** argv)
     for (int i = 0; i < dmp[d].NSamples; i++)
       myFile<<dmp[d].Rddy(i)<<endl;
     myFile.close();
+
+    oss_sm << "CHECK/Ry_smoothed" << d <<".log";
+
+    myFile.open((oss_sm.str()).c_str());
+    for (int i = 0; i < dmp[d].Ry.n_cols; i++)
+        myFile<<dmp[d].Ry_smoothed(i)<<endl;
+    myFile.close();
   }
+
+  cout<<"SAVE RESULTS DONE"<<endl;
 
   /* End time*/
   gettimeofday (&endwtime, NULL);

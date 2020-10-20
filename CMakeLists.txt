@@ -23,7 +23,7 @@ catkin_package(
 #  CATKIN_DEPENDS autharl_core/ roscpp
 #  DEPENDS system_lib
   INCLUDE_DIRS include
-  CATKIN_DEPENDS roscpp 
+  CATKIN_DEPENDS roscpp
   DEPENDS
 )
 
@@ -51,5 +51,8 @@ add_executable(master src/master.cpp )
 target_link_libraries(master ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${BOOST_LIBRARIES} ${autharl_core} sigproc_lib)
 #add_dependencies(master sigproc_lib)
 
+add_executable(master_smooth src/master_smooth.cpp )
+target_link_libraries(master_smooth ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${BOOST_LIBRARIES} ${autharl_core} sigproc_lib)
 
-
+add_executable(master_smooth_online src/master_smooth_online.cpp )
+target_link_libraries(master_smooth_online ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${BOOST_LIBRARIES} ${autharl_core} sigproc_lib)
